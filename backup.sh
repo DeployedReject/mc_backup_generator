@@ -10,25 +10,29 @@ TIMESTAMP=$(date "+%Y-%m-%d_%H-%M-%S")
 # --- Main Logic ---
 trap './svctrl.sh -mc save-on' EXIT
 
-# [ -d ... ] checks if the path exists and is a directory
+# Check if source exists
 if [ -d "$SOURCE_FOLDER" ]; then
   echo "Success: The folder '$SOURCE_FOLDER' exists in the current directory." | tee -a "$LOG_FILE" >"$STATUS_FILE"
-  #--Preventing race condition.
+
+  # Prevent race condition
   ./svctrl.sh -mc save-all
   ./svctrl.sh -mc save-off
-  #--Checking if this is the first time the backup is being made
+
+  # Ensure target folder exists
   mkdir -p "$TARGET_FOLDER"
-  mkdir "$TARGET_FOLDER/$TIMESTAMP.backup"
 
-  cp -r "$SOURCE_FOLDER/." "$TARGET_FOLDER/$TIMESTAMP.backup"
+  # Bundle the folder into a tarball WITHOUT compression (-cf instead of -czf)
+  tar -cf "$TARGET_FOLDER/$TIMESTAMP.tar" "$SOURCE_FOLDER"
 
-  COUNT=$(ls -1d "$TARGET_FOLDER"/*.backup 2>/dev/null | wc -l)
+  # Cleanup old backups (Keep only the 3 newest)
+  COUNT=$(ls -1 "$TARGET_FOLDER"/*.tar 2>/dev/null | wc -l)
   if [ "$COUNT" -gt 3 ]; then
-    OLDEST=$(ls -1d "$TARGET_FOLDER"/*.backup 2>/dev/null | sort | head -n 1)
-    rm -rf "$OLDEST"
+    OLDEST=$(ls -1 "$TARGET_FOLDER"/*.tar 2>/dev/null | sort | head -n 1)
+    rm -f "$OLDEST"
     echo "Deleted $OLDEST (Total: $COUNT)" | tee -a "$LOG_FILE" >>"$STATUS_FILE"
   fi
 
+  # Sync to Google Drive
   rclone sync "$TARGET_FOLDER" gdrive:"$TARGET_FOLDER"
 
 else
