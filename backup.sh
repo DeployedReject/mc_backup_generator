@@ -5,39 +5,34 @@ SOURCE_FOLDER="world"
 TARGET_FOLDER="backup"
 LOG_FILE="backup.log"
 STATUS_FILE="backup.status.log"
-TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
+TIMESTAMP=$(date "+%Y-%m-%d_%H-%M-%S")
 
 # --- Main Logic ---
-trap ./svctrl.sh -mc save-on EXIT
-
-
-
+trap './svctrl.sh -mc save-on' EXIT
 
 # [ -d ... ] checks if the path exists and is a directory
 if [ -d "$SOURCE_FOLDER" ]; then
-  echo "Success: The folder '$SOURCE_FOLDER' exists in the current directory." | tee -a "$LOG_FILE" > "$STATUS_FILE"
-#--Preventing race condition.
+  echo "Success: The folder '$SOURCE_FOLDER' exists in the current directory." | tee -a "$LOG_FILE" >"$STATUS_FILE"
+  #--Preventing race condition.
   ./svctrl.sh -mc save-all
   ./svctrl.sh -mc save-off
-#--Checking if this is the first time the backup is being made
-  if[! -d "$TARGET_FOLDER"]; then
-   mkdir $TARGET_FOLDER
-  fi
- mkdir "$TARGET_FOLDER/$TIMESTAMP.backup"
- cp -r world/. "$TARGET_FOLDER/$TIMESTAMP.backup"
- cd $TARGET_FOLDER
- COUNT=$(ls -1d *.backup 2>/dev/null | wc -l)
- if ["$COUNT" -gt 3]; then
-  OLDEST=$(ls -1d *.backup | sort | head -n 1)
-  rm -rf "$OLDEST"
-  echo "Deleted $OLDEST (Total: $COUNT)" | tee -a "$LOG_FILE" >> STATUS_FILE
- fi
-cd .. 
-rclone sync $TARGET_FOLDER gdrive:$TARGET_FOLDER
+  #--Checking if this is the first time the backup is being made
+  mkdir -p "$TARGET_FOLDER"
+  mkdir "$TARGET_FOLDER/$TIMESTAMP.backup"
 
+  cp -r "$SOURCE_FOLDER/." "$TARGET_FOLDER/$TIMESTAMP.backup"
+
+  COUNT=$(ls -1d "$TARGET_FOLDER"/*.backup 2>/dev/null | wc -l)
+  if [ "$COUNT" -gt 3 ]; then
+    OLDEST=$(ls -1d "$TARGET_FOLDER"/*.backup 2>/dev/null | sort | head -n 1)
+    rm -rf "$OLDEST"
+    echo "Deleted $OLDEST (Total: $COUNT)" | tee -a "$LOG_FILE" >>"$STATUS_FILE"
+  fi
+
+  rclone sync "$TARGET_FOLDER" gdrive:"$TARGET_FOLDER"
 
 else
-  echo "Error: Could not find a folder named '$TARGET_FOLDER'." >> "$LOG_FILE"
+  echo "Error: Could not find a folder named '$SOURCE_FOLDER'." >>"$LOG_FILE"
   echo "Current directory contents:"
   ls -F
   exit 1
